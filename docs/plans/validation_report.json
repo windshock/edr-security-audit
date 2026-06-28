@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-06-23T23:24:40Z",
+  "results": [
+    { "tc_id": "TC-01", "name": "TC-01: Detection Telemetry", "privilege": "Root", "marker": "EDR_POC_TC01_1782256445", "local_status": "0", "marker_hits": 1, "key_hits": 59, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-02", "name": "TC-02: TLS Verification", "privilege": "Root", "marker": "EDR_POC_TC02_1782256450", "local_status": "0", "marker_hits": 4, "key_hits": 47, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-03", "name": "TC-03: Configuration Manipulation", "privilege": "Root", "marker": "EDR_POC_TC03_1782256452", "local_status": "0", "marker_hits": 4, "key_hits": 47, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-04", "name": "TC-04: Anti-Tamper", "privilege": "Root", "marker": "EDR_POC_TC04_1782256455", "local_status": "0", "marker_hits": 0, "key_hits": 62, "visibility": "OBSERVED", "security_finding": "none (blocked; threat in .threats)" },
+    { "tc_id": "TC-05", "name": "TC-05: Symlink/TOCTOU", "privilege": "Root", "marker": "EDR_POC_TC05_1782256459", "local_status": "0", "marker_hits": 3, "key_hits": 44, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-06", "name": "TC-06: Abstract Unix Socket IPC", "privilege": "Root", "marker": "EDR_POC_TC06_1782256461", "local_status": "0", "marker_hits": 1, "key_hits": 41, "visibility": "OBSERVED", "security_finding": "none (no socket-connect event)" },
+    { "tc_id": "TC-07", "name": "TC-07: Low-Level Kernel Telemetry", "privilege": "Root", "marker": "EDR_POC_TC07_1782256464", "local_status": "0", "marker_hits": 5, "key_hits": 12, "visibility": "OBSERVED", "security_finding": "none (direct-syscall evasion defeated)" },
+    { "tc_id": "TC-08", "name": "TC-08: Short-Lived Process Burst", "privilege": "Root", "marker": "EDR_POC_TC08_1782256466", "local_status": "0", "marker_hits": 0, "key_hits": 635, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-09", "name": "TC-09: Package Manipulation", "privilege": "Root", "marker": "EDR_POC_TC09_1782256472", "local_status": "0", "marker_hits": 0, "key_hits": 41, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-10", "name": "TC-10: Non-Root Permissions", "privilege": "crtester", "marker": "EDR_POC_TC10_1782256474", "local_status": "0", "marker_hits": 1, "key_hits": 41, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-11", "name": "TC-11: Non-Root Process Control", "privilege": "crtester", "marker": "EDR_POC_TC11_1782256475", "local_status": "0", "marker_hits": 0, "key_hits": 53, "visibility": "OBSERVED", "security_finding": "none (blocked; threat in .threats)" },
+    { "tc_id": "TC-12", "name": "TC-12: Non-Root IPC Access", "privilege": "crtester", "marker": "EDR_POC_TC12_1782256477", "local_status": "0", "marker_hits": 1, "key_hits": 41, "visibility": "OBSERVED", "security_finding": "FINDING: non-root reaches all 9 IPC sockets" },
+    { "tc_id": "TC-13", "name": "TC-13: Non-Root Persistence", "privilege": "crtester", "marker": "EDR_POC_TC13_1782256480", "local_status": "0", "marker_hits": 4, "key_hits": 59, "visibility": "OBSERVED", "security_finding": "none" },
+    { "tc_id": "TC-14", "name": "TC-14: Non-Root Privilege Bypass", "privilege": "crtester", "marker": "EDR_POC_TC14_1782256481", "local_status": "0", "marker_hits": 0, "key_hits": 44, "visibility": "OBSERVED", "security_finding": "none" }
+  ]
+}

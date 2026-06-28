@@ -1,0 +1,9 @@
+컴파일 OK
+--- 실행 출력 ---
+io_uring OPENAT ok, fd=4 (path=/tmp/IOURING_EVIDENCE_20260624.txt)
+io_uring WRITE ok, 16 bytes
+DONE (no openat/write syscall issued; only io_uring_setup/enter)
+--- strace (마커 파일 관련 syscall: io_uring_* 만 있어야) ---
+54336 io_uring_setup(8, {flags=0, sq_thread_cpu=0, sq_thread_idle=0, sq_entries=8, cq_entries=16, features=IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING, sq_off={head=0, tail=4, ring_mask=16, ring_entries=24, flags=36, dropped=32, array=320, user_addr=0}, cq_off={head=8, tail=12, ring_mask=20, ring_entries=28, overflow=44, cqes=64, flags=40, user_addr=0}}) = 3
+54336 io_uring_enter(3, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0) = 1
+54336 io_uring_enter(3, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0) = 1

@@ -1,0 +1,40 @@
+# ── 자격증명 / 환경 ──
+.env
+.env.*
+*.token
+.DS_Store
+
+# ── 무관 파일 (에이전트 사용량 통계 등) ──
+all.json
+gemini.json
+
+# ── 벤더 독점 자산 : 저작권, 공개 금지 ──
+# (분석 결과 .md 는 우리 저작이므로 공개; 원본 바이너리/디컴파일/eBPF만 제외)
+bin/agent/
+bin/extracted/
+bin/decompiled/*.c
+bin/decompiled/agent_targeted/
+bin/ebpf/*.o
+bin/ebpf/*.asm
+bin/decompiled/*.asm
+bin/decompiled/*_ipc_evidence.txt
+docs/guides/
+
+# ── 민감 운영 데이터 ──
+logs/
+*.tar.gz
+
+# ── 증거 원본 (민감정보 포함; 스크럽본만 공개) ──
+docs/findings/evidence/*.json
+
+# ── 별도 레포 / 서브모듈 ──
+*-mcp/
+security-hypothesis-lab/
+
+# ── 내부 의사결정 이력 / 실험 노트 ──
+*handoff*.md
+docs/experiments/
+
+# ── 파이썬 캐시 ──
+__pycache__/
+*.pyc

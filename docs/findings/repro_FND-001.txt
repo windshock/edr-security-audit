@@ -1,0 +1,116 @@
+================================================================================
+FND-001 재현 절차 및 결과 — EDR-X Linux Agent Anti-Tamper 파일 무결성 보호
+  (lsm=bpf 커널 파라미터 의존성)
+작성: 2026-06-22  /  분석: EDR-X EDR PoC 검증팀
+================================================================================
+
+[요약]
+EDR-X Linux Agent의 Anti-Tamper 중 "파일 무결성 보호"(agent 바이너리/디렉토리
+변조 차단)는 BPF LSM 으로 구현되며, 커널 부트 파라미터 'lsm=bpf' 활성화가 전제조건이다.
+'lsm=bpf' 미설정 커널에서는 파일 무결성 보호가 동작하지 않아, root 권한 사용자가 agent
+바이너리/설정을 변조·생성·삭제할 수 있다. (kill/프로세스 보호는 kprobe 기반으로 양쪽 모두 정상.)
+대조실험(lsm=bpf 추가 후 재부팅)에서 파일 보호가 정상 차단으로 전환됨을 확인했다.
+
+--------------------------------------------------------------------------------
+[환경]
+--------------------------------------------------------------------------------
+- 가상화      : Colima (Apple Virtualization.framework, x86_64)
+- OS/커널     : Ubuntu, kernel 6.8.0-64-generic
+- Agent       : EDR-X Linux <agent-version>
+- 콘솔 표시   : Enabled / connected / isUpToDate=true / showAlertIcon=false
+                missingPermissions=[] / userActionsNeeded=[]
+- 권한        : 아래 테스트는 모두 root(sudo)로 수행 (일반 사용자는 파일 권한으로 별도 차단)
+
+--------------------------------------------------------------------------------
+[A] BASELINE — lsm=bpf 미설정 (기본 부트)
+--------------------------------------------------------------------------------
+# A-1. 커널 LSM 상태
+$ cat /proc/cmdline
+BOOT_IMAGE=/vmlinuz-6.8.0-64-generic ... ro console=tty1 console=ttyS0 panic=-1
+  → 'lsm=' 파라미터 없음
+$ cat /sys/kernel/security/lsm
+lockdown,capability,landlock,yama,apparmor
+  → 'bpf' 미포함
+
+# A-2. agent 가 로드한 BPF 프로그램 타입 분포 (PID 518)
+  prog_type 2 (KPROBE)      : 142
+  prog_type 5 (TRACEPOINT)  : 23
+  prog_type 17 (PERF_EVENT) : 6
+  prog_type 29 (LSM)        : 0     <-- BPF LSM 프로그램 0개 (attach 실패)
+
+# A-3. 행동 테스트 (root, 비파괴: write 안 함/생성물 즉시 삭제)
+$ sudo python3 -c 'import os; fd=os.open("/opt/edr-x/bin/edrctl", os.O_WRONLY); print("OPENED",fd); os.close(fd)'
+  결과: OPENED 3                 <-- 보호 바이너리 쓰기 열기 성공 (차단 안 됨)
+
+$ sudo python3 -c 'import os; p="/opt/edr-x/bin/__probe.tmp"; fd=os.open(p,os.O_CREAT|os.O_WRONLY,0o600); os.close(fd); os.unlink(p); print("CREATED+REMOVED")'
+  결과: CREATED+REMOVED          <-- 보호 디렉토리 신규 파일 생성 성공 (차단 안 됨)
+
+# A-4. 대조군 — kill 보호 (kprobe override)
+$ sudo python3 -c 'import os; os.kill(518,0)'        # agent
+  결과: PermissionError: [Errno 1] Operation not permitted   <-- agent kill 차단됨
+$ sudo python3 -c 'import os; os.kill(1,0)'          # systemd
+  결과: 정상 (OK)                                            <-- 일반 프로세스는 접근 가능
+  → kill 보호는 lsm=bpf 없이도 작동 (kprobe 기반)
+
+[BASELINE 결론] 파일 무결성 보호 미작동 / kill 보호 작동.
+
+--------------------------------------------------------------------------------
+[B] 대조실험 — lsm=bpf 활성 후 재부팅
+--------------------------------------------------------------------------------
+# B-1. 변경 (유일 변수: lsm=bpf)
+$ cat /etc/default/grub.d/99-lsm-bpf.cfg
+GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX lsm=lockdown,capability,landlock,yama,apparmor,bpf"
+$ sudo update-grub && (reboot)
+
+# B-2. 적용 확인
+$ cat /sys/kernel/security/lsm
+lockdown,capability,landlock,yama,apparmor,bpf            <-- bpf 활성
+
+# B-3. agent BPF 프로그램 타입 (재기동·정책적용 완료 후, PID 518)
+  prog_type 2 (KPROBE)      : 123
+  prog_type 5 (TRACEPOINT)  : 23
+  prog_type 17 (PERF_EVENT) : 6
+  prog_type 29 (LSM)        : 61    <-- BPF LSM 프로그램 61개 로드됨
+
+# B-4. 측정 타이밍 주의
+  재부팅 직후 ~1-2분은 anti-tamper 정책 미적용 윈도우라 보호가 비활성(kill·파일 모두 통과).
+  'kill -0' 가 EPERM 으로 복귀(정책 적용 완료)한 시점을 확인한 뒤 측정.
+
+# B-5. 행동 재시험 (anti-tamper 활성 확인 후)
+  agent kill -0                          : EPERM (차단)   [보호 활성 확인]
+  edrctl O_WRONLY open              : EPERM (차단)   <-- 작동! (baseline 대비 전환)
+  보호 디렉토리 파일 생성                : EPERM (차단)   <-- 작동!
+  보호 바이너리 unlink                   : EPERM (차단)   <-- 작동!
+
+[대조 결론] lsm=bpf 활성 시 파일 무결성 보호 정상 작동(변조 차단).
+
+--------------------------------------------------------------------------------
+[C] 종합 — 단일 변수 대조표
+--------------------------------------------------------------------------------
+  테스트                          | lsm=bpf 없음   | lsm=bpf 있음
+  --------------------------------|---------------|-------------
+  active LSM 'bpf'                | 없음          | 있음
+  agent LSM prog (type 29)        | 0개           | 61개
+  agent kill -0                   | EPERM(차단)   | EPERM(차단)
+  보호 바이너리 write-open        | 성공(미작동)  | EPERM(차단)
+  보호 디렉토리 파일생성          | 성공(미작동)  | EPERM(차단)
+  보호 바이너리 unlink            | (미시험)      | EPERM(차단)
+
+  → 유일 변수 lsm=bpf 가 파일 무결성 보호의 작동 여부를 결정.
+  → kill 보호는 양쪽 모두 작동 (kprobe override fallback).
+
+--------------------------------------------------------------------------------
+[질의 사항]
+--------------------------------------------------------------------------------
+ 1. 기본 부트(lsm=bpf 미설정) 커널에서 파일 무결성 보호가 미동작하는 것이 의도된 동작인지?
+ 2. "lsm=bpf 불필요" 안내와 본 대조실험(lsm=bpf 설정 시에만 파일보호 작동)이 배치됨.
+    파일 무결성 보호에 권장되는 커널 구성 가이드가 있는지?
+ 3. 파일보호 저하 시 콘솔에 노출되는 신호가 있는지? (현재 해당 엔드포인트는 콘솔상 정상 표시)
+
+--------------------------------------------------------------------------------
+[비고]
+--------------------------------------------------------------------------------
+- 모든 행동 테스트는 비파괴적: write 미수행, 생성 파일 즉시 삭제, unlink는 EPERM으로 미실행.
+- 롤백: /etc/default/grub.d/99-lsm-bpf.cfg 삭제 후 update-grub + 재부팅.
+- 백업: /etc/default/grub.bak.*, /boot/grub/grub.cfg.bak.* 보존.
+================================================================================
